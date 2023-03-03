@@ -574,7 +574,7 @@ void process_general_msgs()
     smsg(SMSG_ACKNW);
   }
 
-  else if (serial_data == int(SMSG_PACK)) //show pack number on displays for 10 seconds
+  else if (serial_data == int(SMSG_PACK)) //show pack number on displays
   {
     showChar(0, '0');
     showChar(1, '2');
@@ -587,11 +587,10 @@ void process_general_msgs()
       showChar(6, '2');
       showChar(7, 'P');
     }
-
-    delay(10000);    
+  
   }
 
-  else if (serial_data == int(SMSG_LANES)) //show lane numbers on displays for 10 seconds
+  else if (serial_data == int(SMSG_LANES)) //show lane numbers on displays
   {
     showChar(0, '1');
     showChar(1, '2');
@@ -604,12 +603,12 @@ void process_general_msgs()
     showChar(6, '2');
     showChar(7, '1');
     }
-
-    delay(10000);    
+ 
   }
 
    else if (serial_data == int(SMSG_CHECK)) //start lane sensor check
   {
+    mode = mTEST;
     smsg(SMSG_ACKNW);
     check_lane_sensors();
   }
@@ -763,6 +762,11 @@ void test_pdt_hw()
 void check_lane_sensors() {
   int  lane_status[NUM_LANES];
   
+  //smsg_str("LANE CHECK MODE");
+  set_status_led();
+  delay(2000); 
+  set_display_brightness(); //for good measure - some cases the brightness change isn't seen by displays
+
   while(true)
   {
     for (int n=0; n<NUM_LANES; n++)
@@ -780,8 +784,14 @@ void check_lane_sensors() {
   #else
       if (lane_status[n] == HIGH) {
         showChar(n, '+');
+        if (NUM_MATRICES==8) {
+          showChar(8-n, '+');
+        }
       } else {
         showChar(n, 'O');
+        if (NUM_MATRICES==8) {
+          showChar(8-n, 'O');
+        }
       }
   #endif
     }
@@ -789,7 +799,7 @@ void check_lane_sensors() {
     serial_data = get_serial_data();
 
     if (serial_data == int(SMSG_RESET) || digitalRead(RESET_SWITCH) == LOW) {
-      smsg(SMSG_ACKNW);
+      initialize(); //perform an actual reset
       break;
     }
 
