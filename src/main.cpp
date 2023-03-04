@@ -87,7 +87,7 @@ byte plus[8]={B00000000,B00000000,B00000000,B00010000,B00111000,B00010000,B00000
 #define mFINISH      2
 #define mTEST        3
 
-#define START_TRIP   LOW              // start switch trip condition
+#define START_TRIP   HIGH              // start switch trip condition
 #define NULL_TIME    9.999             // null (non-finish) time
 #define NUM_DIGIT    4                 // timer resolution (# of decimals)
 #define DISP_DIGIT   4                 // total number of display digits
@@ -784,13 +784,13 @@ void check_lane_sensors() {
   #else
       if (lane_status[n] == HIGH) {
         showChar(n, '+');
-        if (NUM_MATRICES==8) {
-          showChar(8-n, '+');
+        if (NUM_MATRICES==8) { //show on both sides
+          showChar(7-n, '+');
         }
       } else {
         showChar(n, 'O');
-        if (NUM_MATRICES==8) {
-          showChar(8-n, 'O');
+        if (NUM_MATRICES==8) { //show on both sides
+          showChar(7-n, 'O');
         }
       }
   #endif
@@ -1035,27 +1035,13 @@ void update_display(int lane, int display_place, unsigned long display_time, int
     if (display_place > 0) {  // show place order
       showChar(lane, cplace[0]);
       if (NUM_MATRICES==8) {
-        if(lane==0)
-          showChar(7, cplace[0]);
-        if (lane==1)
-          showChar(6, cplace[0]);
-        if (lane==2)
-          showChar(5, cplace[0]);
-        if (lane==3)
-          showChar(4, cplace[0]);
+        showChar(7-lane, cplace[0]);
       }
 
     } else {
       showChar(lane, '-'); //did not finish
       if (NUM_MATRICES==8) {
-        if(lane==0)
-          showChar(7, '-');
-        if (lane==1)
-          showChar(6, '-');
-        if (lane==2)
-          showChar(5, '-');
-        if (lane==3)
-          showChar(4, '-');
+        showChar(7-lane, '-');
       }
     }
 
