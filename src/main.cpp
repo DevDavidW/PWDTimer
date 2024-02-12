@@ -31,7 +31,11 @@
 #define NUM_LANES    4                 // number of lanes
 #define GATE_RESET   0                 // Enable closing start gate to reset timer
 
+#define ENABLE_DISPLAYS 1
+//Define one or the other of these (either Arduino led displays or MAX7219 based matricies)
 //#define LED_DISPLAY  1                 // Enable lane place/time displays
+#define MATRIX_DISPLAY 1               //Enable use of 8x8 matrices
+
 //#define DUAL_DISP    1                 // dual displays per lane (4 lanes max)
 //#define DUAL_MODE    1                 // dual display mode
 //#define LARGE_DISP   1                 // utilize large Adafruit displays (see website)
@@ -41,38 +45,19 @@
 #define MIN_BRIGHT   0                 // minimum display brightness (0-15)
 #define MAX_BRIGHT   15                // maximum display brightness (0-15)
 
-#define MATRIX_DISPLAY 1               //Enable use of 8x8 matrices
-#ifdef MATRIX_DISPLAY
-#define DATA_PIN       6               //Data Pin
-#define CLK_PIN        7               //Clock Pin
-#define CS_PIN         13              //Chip Select Pin - reusing this pin instead of solenoid
-#define NUM_MATRICES   8               //Number of 8x8 matrices/modules in use
-#endif
-
 #define ENABLE_TIMEOUT  1              // Enable line timeout (time > NULL_TIME)
+
+char packnum[4] = {'P', '2', '2', '0'}; //start message (pack numbner)
+
 /*-----------------------------------------*
   - END -
  *-----------------------------------------*/
 
 
-#ifdef LED_DISPLAY                     // LED control libraries
-#include "Wire.h"
-#include "Adafruit_LEDBackpack.h"
-#include "Adafruit_GFX.h"
-#endif
-#ifdef MATRIX_DISPLAY
-#include <LedControl_SW_SPI.h>
-
-LedControl_SW_SPI lc=LedControl_SW_SPI();
-byte zero[8]={B00000000, B00000000, B01111100,B10100010,B10010010,B10001010,B01111100,B00000000};
-byte one[8]={B00000000,B00000000,B00000000,B11111110,B01000000,B00100000,B00000000,B00000000};
-byte two[8]={B00000000,B00000000,B01100010,B10010010,B10010010,B10010010,B10001110,B00000000};
-byte three[8]={B00000000,B00000000,B01101100,B10010010,B10010010,B10010010,B10000010,B00000000};
-byte four[8]={B00000000,B00000000,B11111110,B00010000,B00010000,B00010000,B11110000,B00000000};
-byte ltro[8]={B00000000, B00000000, B01111100,B10000010,B10000010,B10000010,B01111100,B00000000};
-byte ltrp[8]={B00000000,B00000000,B01100000,B10010000,B10010000,B10010000,B11111110,B00000000};
-byte dash[8]={B00000000,B00000000,B00001000,B00001000,B00001000,B00000000,B00000000,B00000000};
-byte plus[8]={B00000000,B00000000,B00000000,B00010000,B00111000,B00010000,B00000000,B00000000};
+#ifdef LED_DISPLAY                     // LED DISPLAY library
+#include "led_functions.h"
+#elif MATRIX_DISPLAY                   // LED MATRIX library
+#include "matrix_functions.h"
 #endif
 
 /*-----------------------------------------*
@@ -80,14 +65,13 @@ byte plus[8]={B00000000,B00000000,B00000000,B00010000,B00111000,B00010000,B00000
  *-----------------------------------------*/
 #define PDT_VERSION  "3.20"            // software version
 #define MAX_LANE     6                 // maximum number of lanes (Uno)
-#define MAX_DISP     8                 // maximum number of displays (Adafruit)
 
 #define mREADY       0                 // program modes
 #define mRACING      1
 #define mFINISH      2
 #define mTEST        3
 
-#define START_TRIP   HIGH              // start switch trip condition
+#define START_TRIP   LOW              // start switch trip condition (HIGH for Track, LOW for Test Setup)
 #define NULL_TIME    9.999             // null (non-finish) time
 #define NUM_DIGIT    4                 // timer resolution (# of decimals)
 #define DISP_DIGIT   4                 // total number of display digits
@@ -141,9 +125,6 @@ byte START_GATE   = 12;                // start gate switch
 byte START_SOL    = 13;                // start solenoid
 #endif
 
-//                Display #    1     2     3     4     5     6     7     8
-int  DISP_ADD [MAX_DISP] = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77};    // display I2C addresses
-
 //                   Lane #    1     2     3     4     5     6
 byte LANE_DET [MAX_LANE] = {   2,    3,    4,    5,    6,    7};                // finish detection pins
 
@@ -164,28 +145,6 @@ byte          mode;                    // current program mode
 
 float         display_level = -1.0;    // display brightness level
 
-#ifdef LARGE_DISP
-unsigned char msgGateC[] = {0x6D, 0x41, 0x00, 0x0F, 0x07};  // S=CL
-unsigned char msgGateO[] = {0x6D, 0x41, 0x00, 0x3F, 0x5E};  // S=OP
-unsigned char msgLight[] = {0x41, 0x41, 0x00, 0x00, 0x07};  // == L
-unsigned char msgDark [] = {0x41, 0x41, 0x00, 0x00, 0x73};  // == d
-#else
-unsigned char msgGateC[] = {0x6D, 0x48, 0x00, 0x39, 0x38};  // S=CL
-unsigned char msgGateO[] = {0x6D, 0x48, 0x00, 0x3F, 0x73};  // S=OP
-unsigned char msgLight[] = {0x48, 0x48, 0x00, 0x00, 0x38};  // == L
-unsigned char msgDark [] = {0x48, 0x48, 0x00, 0x00, 0x5e};  // == d
-#endif
-unsigned char msgDashT[] = {0x40, 0x40, 0x00, 0x40, 0x40};  // ----
-unsigned char msgDashL[] = {0x00, 0x00, 0x00, 0x40, 0x00};  //   -
-unsigned char msgBlank[] = {0x00, 0x00, 0x00, 0x00, 0x00};  // (blank)
-
-#ifdef LED_DISPLAY                     // LED display control
-Adafruit_7segment disp_mat[MAX_DISP];
-#endif
-
-#ifdef DUAL_MODE                       // uses 8x8 matrix displays
-Adafruit_8x8matrix disp_8x8[MAX_DISP];
-#endif
 
 //method declarations
 void initialize(boolean powerup=false);
@@ -196,7 +155,6 @@ void timer_ready_state();
 void timer_racing_state();
 void set_status_led();
 void set_display_brightness();
-void update_display(int lane, unsigned char msg[]);
 void update_display(int lane, int display_place, unsigned long display_time, int display_mode);
 void send_timer_info();
 void test_pdt_hw();
@@ -208,9 +166,6 @@ void send_race_results();
 void display_race_results();
 void process_general_msgs();
 void timer_finished_state();
-#ifdef MATRIX_DISPLAY
-void showChar(int addr, char c_char);
-#endif
 
 /*================================================================================*
   SETUP TIMER
@@ -236,73 +191,33 @@ void setup()
   digitalWrite(START_SOL, LOW);
   #endif
 
-#ifdef LED_DISPLAY
-  for (int n=0; n<MAX_DISP; n++)
-  {
-    disp_mat[n] = Adafruit_7segment();
-    disp_mat[n].begin(DISP_ADD[n]);
-    disp_mat[n].clear();
-    disp_mat[n].drawColon(false);
-    disp_mat[n].writeDisplay();
-
-#ifdef DUAL_MODE
-    disp_8x8[n] = Adafruit_8x8matrix();
-    disp_8x8[n].begin(DISP_ADD[n]);
-    disp_8x8[n].clear();
-    disp_8x8[n].writeDisplay();
-#endif
-  }
-#endif
-#ifdef MATRIX_DISPLAY
-  lc.begin(DATA_PIN,CLK_PIN,CS_PIN,NUM_MATRICES);
-
-  for (int i=0;i<NUM_MATRICES;i++) {
-    lc.shutdown(i,false); //wakeup
-    lc.clearDisplay(i);
-  }
-
-  //show Pack number for a few seconds at startup
-  showChar(0, '0');
-  showChar(1, '2');
-  showChar(2, '2');
-  showChar(3, 'P');
-  if (NUM_MATRICES==8) {
-    showChar(4, '0');
-    showChar(5, '2');
-    showChar(6, '2');
-    showChar(7, 'P');
-  }
-
-  delay(10000);
-
-  //now show lane numbers for a few seconds
-  showChar(0, '1');
-  showChar(1, '2');
-  showChar(2, '3');
-  showChar(3, '4');
-  if (NUM_MATRICES==8) {
-  showChar(4, '4');
-  showChar(5, '3');
-  showChar(6, '2');
-  showChar(7, '1');
-  }
-  delay(10000);
-
-#endif
-
-  for (int n=0; n<NUM_LANES; n++)
-  {
+  for (int n=0; n<NUM_LANES; n++) {
     pinMode(LANE_DET[n], INPUT);
-
     digitalWrite(LANE_DET[n], HIGH);   // enable pull-up resistor
   }
+
+  #ifdef ENABLE_DISPLAYS
   set_display_brightness();
+  #endif
 
 /*-----------------------------------------*
   - software setup -
  *-----------------------------------------*/
   Serial.begin(9600);
   smsg(SMSG_POWER);
+
+  #ifdef ENABLE_DISPLAYS
+    setup_displays();
+
+    //show Pack number for a few seconds at startup
+    for (int i=0; i<NUM_MATRICES;i=i+NUM_LANES) {
+      for (int n=0;n<NUM_LANES;n++) {
+        showChar(i+n, packnum[NUM_LANES-n-1]); //display in reverse
+      }
+    }
+
+    delay(4000);  //was 10000
+  #endif
 
 /*-----------------------------------------*
   - check for test mode -
@@ -488,7 +403,9 @@ void timer_finished_state()
       send_race_results();
   } 
 
+  #ifdef ENABLE_DISPLAYS
   set_display_brightness();
+  #endif
   display_race_results();
 
   return;
@@ -576,32 +493,27 @@ void process_general_msgs()
 
   else if (serial_data == int(SMSG_PACK)) //show pack number on displays
   {
-    showChar(0, '0');
-    showChar(1, '2');
-    showChar(2, '2');
-    showChar(3, 'P');
-
-    if (NUM_MATRICES==8) {
-      showChar(4, '0');
-      showChar(5, '2');
-      showChar(6, '2');
-      showChar(7, 'P');
+    //show Pack number for a few seconds at startup
+    for (int i=0; i<NUM_MATRICES;i=i+NUM_LANES) {
+      for (int n=0;n<NUM_LANES;n++) {
+        showChar(i+n, packnum[NUM_LANES-n-1]); //display in reverse
+      }
     }
   
   }
 
   else if (serial_data == int(SMSG_LANES)) //show lane numbers on displays
   {
-    showChar(0, '1');
-    showChar(1, '2');
-    showChar(2, '3');
-    showChar(3, '4');
 
-    if (NUM_MATRICES==8) {
-    showChar(4, '4');
-    showChar(5, '3');
-    showChar(6, '2');
-    showChar(7, '1');
+    //now show lane numbers
+    for (int n=0;n<NUM_LANES;n++) {
+      showChar(n, (char)49+n);
+    }
+
+    if (NUM_MATRICES > NUM_LANES) { //uses both sides of finish line
+      for (int n=0;n<NUM_LANES;n++) {
+        showChar(NUM_LANES+n, (char)48+NUM_LANES-n); //reverse order
+      }
     }
  
   }
@@ -623,29 +535,24 @@ void process_general_msgs()
 void test_pdt_hw()
 {
   int  lane_status[NUM_LANES];
-#ifdef LED_DISPLAY
-  char ctmp[10];
-#endif
 
   smsg_str("TEST MODE");
   set_status_led();
   delay(2000); 
 
+  #ifdef ENABLE_DISPLAYS
+    set_display_brightness();
+  #endif
 /*-----------------------------------------*
    show status of lane detectors
  *-----------------------------------------*/
-  while(true)
-  {
-    for (int n=0; n<NUM_LANES; n++)
-    {
+  while(true) {
+    for (int n=0; n<NUM_LANES; n++) {
       lane_status[n] = bitRead(PIND, LANE_DET[n]);    // read status of all lanes
 #ifndef MATRIX_DISPLAY
-      if (lane_status[n] == HIGH)
-      {
+      if (lane_status[n] == HIGH) {
         update_display(n, msgDark);
-      }
-      else
-      {
+      } else {
         update_display(n, msgLight);
       }
   #else
@@ -699,52 +606,9 @@ void test_pdt_hw()
 /*-----------------------------------------*
    show pattern for brightness adjustment
  *-----------------------------------------*/
-  while(true)
-  {
-#ifdef LED_DISPLAY
+  while(true)  {
     set_display_brightness();
-
-    for (int n=0; n<NUM_LANES; n++)
-    {
-      sprintf(ctmp,"%d%03d", (n+1), (int)display_level);
-
-      disp_mat[n].clear();
-
-      disp_mat[n].writeDigitNum(0, char2int(ctmp[0]), false);
-      disp_mat[n].writeDigitNum(1, char2int(ctmp[1]), false);
-      disp_mat[n].writeDigitNum(3, char2int(ctmp[2]), false);
-      disp_mat[n].writeDigitNum(4, char2int(ctmp[3]), false);
-
-      disp_mat[n].drawColon(false);
-      disp_mat[n].writeDisplay();
-
-#ifdef DUAL_DISP
-#ifdef DUAL_MODE
-      disp_8x8[n+4].clear();
-      disp_8x8[n+4].setTextSize(1);
-      disp_8x8[n+4].setRotation(3);
-      disp_8x8[n+4].setCursor(2, 0);
-      disp_8x8[n+4].print("X");
-      disp_8x8[n+4].writeDisplay();
-#else
-      disp_mat[n+4].clear();
-
-      disp_mat[n+4].writeDigitNum(0, char2int(ctmp[0]), false);
-      disp_mat[n+4].writeDigitNum(1, char2int(ctmp[1]), false);
-      disp_mat[n+4].writeDigitNum(3, char2int(ctmp[2]), false);
-      disp_mat[n+4].writeDigitNum(4, char2int(ctmp[3]), false);
-
-      disp_mat[n+4].drawColon(false);
-      disp_mat[n+4].writeDisplay();
-#endif
-#endif
-    }
-#endif
-
-#ifdef MATRIX_DISPLAY
-    set_display_brightness();
-    showChar(0, '0');
-#endif
+    show_brightness_pattern(display_level);
 
     if (digitalRead(RESET_SWITCH) == LOW)  // break out of this test
     {
@@ -764,21 +628,18 @@ void check_lane_sensors() {
   
   //smsg_str("LANE CHECK MODE");
   set_status_led();
-  delay(2000); 
+  delay(2000);
+  #ifdef ENABLE_DISPLAYS
   set_display_brightness(); //for good measure - some cases the brightness change isn't seen by displays
+  #endif
 
-  while(true)
-  {
-    for (int n=0; n<NUM_LANES; n++)
-    {
+  while(true) {
+    for (int n=0; n<NUM_LANES; n++) {
       lane_status[n] = bitRead(PIND, LANE_DET[n]);    // read status of all lanes
 #ifndef MATRIX_DISPLAY
-      if (lane_status[n] == HIGH)
-      {
+      if (lane_status[n] == HIGH) {
         update_display(n, msgDark);
-      }
-      else
-      {
+      } else {
         update_display(n, msgLight);
       }
   #else
@@ -866,57 +727,6 @@ void display_race_results()
     display_mode = !display_mode;
     last_display_update = now;
   }
-
-  return;
-}
-
-
-/*================================================================================*
-  SEND MESSAGE TO DISPLAY
- *================================================================================*/
-void update_display(int lane, unsigned char msg[])
-{
-
-#ifdef LED_DISPLAY
-  disp_mat[lane].clear();
-#ifdef DUAL_DISP
-#ifdef DUAL_MODE
-  disp_8x8[lane+4].clear();
-#else
-  disp_mat[lane+4].clear();
-#endif
-#endif
-
-  for (int d = 0; d<=4; d++)
-  {
-    disp_mat[lane].writeDigitRaw(d, msg[d]);
-#ifdef DUAL_DISP
-#ifdef DUAL_MODE
-    if (d == 3)
-    {
-      disp_8x8[lane+4].setTextSize(1);
-      disp_8x8[lane+4].setRotation(3);
-      disp_8x8[lane+4].setCursor(2, 0);
-      if (msg == msgBlank)
-         disp_8x8[lane+4].print(" ");
-      else
-         disp_8x8[lane+4].print("-");
-    }
-#else
-    disp_mat[lane+4].writeDigitRaw(d, msg[d]);
-#endif
-#endif
-  }
-
-  disp_mat[lane].writeDisplay();
-#ifdef DUAL_DISP
-#ifdef DUAL_MODE
-  disp_8x8[lane+4].writeDisplay();
-#else
-  disp_mat[lane+4].writeDisplay();
-#endif
-#endif
-#endif
 
   return;
 }
@@ -1097,25 +907,9 @@ void set_display_brightness()
 
     display_level = new_level;
 
-#ifdef LED_DISPLAY
-    for (int n=0; n<NUM_LANES; n++)
-    {
-      disp_mat[n].setBrightness((int)display_level);
-#ifdef DUAL_DISP
-#ifdef DUAL_MODE
-      disp_8x8[n+4].setBrightness((int)display_level);
-#else
-      disp_mat[n+4].setBrightness((int)display_level);
-#endif
-#endif
-    }
-#endif
-
-#ifdef MATRIX_DISPLAY
-  for (int i=0;i<NUM_MATRICES;i++) {
-    lc.setIntensity(i,display_level);
-  }
-#endif
+    #ifdef ENABLE_DISPLAYS
+      set_display_brightness(display_level);
+    #endif
 
   }
 
@@ -1331,6 +1125,8 @@ void send_timer_info()
 
 #ifdef LED_DISPLAY
   Serial.println("  LED_DISPLAY    1");
+  sprintf(tmps,  "  MAX_DISP       %d", MAX_DISP);
+  Serial.println(tmps);
 #else
   Serial.println("  LED_DISPLAY    0");
 #endif
@@ -1354,7 +1150,7 @@ void send_timer_info()
 
 #ifdef MATRIX_DISPLAY
   Serial.println("  MATRIX_DISP    1");
-  sprintf(tmps, "  NUM_MATRICES   %d", NUM_MATRICES);
+  sprintf(tmps,  "  NUM_MATRICES   %d", NUM_MATRICES);
   Serial.println(tmps);
 #else
   Serial.println("  MATRIX_DISP    0");
@@ -1373,32 +1169,3 @@ void send_timer_info()
 
   return;
 }
-
-#ifdef MATRIX_DISPLAY
-void showChar(int addr, char c_char) {
-  dbg(fDebug, "showChar: addr =" ,addr);
-  dbg(fDebug, "showChar: char =" + c_char);
-
-  if(c_char == '0')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, zero[i]);
-  else if(c_char == '1')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, one[i]);
-  else if(c_char == '2')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, two[i]);
-  else if(c_char == '3')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, three[i]);
-  else if(c_char == '4')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, four[i]);
-  else if(c_char == 'O')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, ltro[i]);
-  else if(c_char == 'P')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, ltrp[i]);
-  else if(c_char == '-')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, dash[i]);
-  else if(c_char == '+')
-      for (int i=0;i<8;i++) lc.setRow(addr, i, plus[i]);
-  else //blank
-      for (int i=0;i<8;i++) lc.setRow(addr, i, B00000000);
-
-}
-#endif
